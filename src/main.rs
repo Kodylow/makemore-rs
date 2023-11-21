@@ -3,7 +3,7 @@ use std::{collections::HashMap, fs};
 
 use burn::autodiff::ADBackendDecorator;
 use burn::backend::{wgpu::AutoGraphicsApi, WgpuBackend};
-use burn::tensor::{Data, Int, Tensor};
+use burn::tensor::{Int, Tensor};
 
 const SPECIAL: char = '.';
 const FILE_PATH: &str = "./makemore/names.txt";
@@ -36,6 +36,8 @@ fn main() {
 
     // create a tensor for each first char like Tensor(3,5,9) for aa:3, ab:5, ac:9
     let bigram_tensor = build_tensors(bigram_counts, stoi);
+
+    println!("{:?}", bigram_tensor.to_data());
 }
 
 fn build_bigrams(names: Vec<&str>) -> Vec<String> {
@@ -58,25 +60,17 @@ fn build_tensors(
     bigram_counts: HashMap<String, i32>,
     stoi: HashMap<char, usize>,
 ) -> Tensor<MyAutodiffBackend, 2, Int> {
-    let mut data: Vec<Vec<i32>> = vec![vec![0; UNIQUE_CHAR_COUNT]; UNIQUE_CHAR_COUNT];
+    let mut bigram_tensor: Tensor<MyAutodiffBackend, 2, Int> =
+        Tensor::zeros([UNIQUE_CHAR_COUNT, UNIQUE_CHAR_COUNT]);
+    for (bigram, count) in bigram_counts {
+        let chars: Vec<char> = bigram.chars().collect();
+        let i = stoi[&chars[0]];
+        let j = stoi[&chars[1]];
+        let new_value = bigram_tensor.clone().slice([i..i + 1, j..j + 1]) + count;
+        bigram_tensor = bigram_tensor.slice_assign([i..i + 1, j..j + 1], new_value);
+    }
 
-    let data: [[i32; UNIQUE_CHAR_COUNT]; UNIQUE_CHAR_COUNT] = data
-        .into_iter()
-        .map(|v| {
-            let mut arr = [0; UNIQUE_CHAR_COUNT];
-            for (i, val) in v.into_iter().enumerate() {
-                arr[i] = val;
-            }
-            arr
-        })
-        .collect::<Vec<_>>()
-        .try_into()
-        .unwrap();
-
-    let data = Data::from(data);
-    let tensor = Tensor::from_data(data);
-
-    tensor
+    bigram_tensor
 }
 
 fn build_chars(names: &Vec<&str>) -> Vec<char> {
