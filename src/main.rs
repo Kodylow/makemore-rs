@@ -6,31 +6,43 @@ use burn::backend::{wgpu::AutoGraphicsApi, WgpuBackend};
 use burn::tensor::{Int, Tensor};
 
 const SPECIAL: char = '.';
-
+const FILE_PATH: &str = "./makemore/names.txt";
 const UNIQUE_CHAR_COUNT: usize = 28;
 
-fn main() {
-    type MyBackend = WgpuBackend<AutoGraphicsApi, f32, i32>;
-    type MyAutodiffBackend = ADBackendDecorator<MyBackend>;
+type MyBackend = WgpuBackend<AutoGraphicsApi, f32, i32>;
+type MyAutodiffBackend = ADBackendDecorator<MyBackend>;
 
-    let contents =
-        fs::read_to_string("./makemore/names.txt").expect("Something went wrong reading the file");
+fn main() {
+    let contents = fs::read_to_string(FILE_PATH).expect("Something went wrong reading the file");
     let names: Vec<&str> = contents.lines().collect();
 
     // create a sorted set of unique characters
-    let sorted_chars = get_chars(&names);
+    let sorted_chars = build_chars(&names);
     let stoi: HashMap<char, usize> = sorted_chars
         .iter()
         .enumerate()
         .map(|(i, c)| (*c, i))
         .collect();
-    let itos: HashMap<usize, char> = sorted_chars
-        .iter()
-        .enumerate()
-        .map(|(i, c)| (i, *c))
-        .collect();
 
     // create character bigrams
+    let bigrams = build_bigrams(names);
+
+    // create hashmap of bigram counts
+    let bigram_counts: HashMap<String, i32> =
+        bigrams.iter().fold(HashMap::new(), |mut acc, bigram| {
+            *acc.entry(bigram.to_string()).or_default() += 1;
+            acc
+        });
+    // // sort counts
+    // let mut bigram_sort: Vec<(String, i32)> = bigram_counts.clone().into_iter().collect();
+    // bigram_sort.sort_by_key(|&(_, count)| -count);
+    // println!("bigram_sort: {:?}", bigram_sort);
+
+    // create a tensor for each first char like Tensor(3,5,9) for aa:3, ab:5, ac:9
+    let bigram_tensor = build_tensors(bigram_counts, stoi);
+}
+
+fn build_bigrams(names: Vec<&str>) -> Vec<String> {
     let mut bigrams: Vec<String> = Vec::new();
     for name in &names {
         // hallucinate a start character '<S>' and end character '<E>'
@@ -38,26 +50,32 @@ fn main() {
         let mut chars = name.chars();
         let mut prev = chars.next().unwrap();
 
-        // create bigrams
         for c in chars {
             bigrams.push(format!("{}{}", prev, c));
             prev = c;
         }
     }
-
-    // create 2 dimensional tensor of bigram counts
-    let mut bigram_counts: Tensor<MyAutodiffBackend, 2, Int> =
-        Tensor::zeros([UNIQUE_CHAR_COUNT, UNIQUE_CHAR_COUNT]);
-    for bigram in &bigrams {
-        let i = stoi[&bigram.chars().nth(0).unwrap()];
-        let j = stoi[&bigram.chars().nth(1).unwrap()];
-        let old_value = bigram_counts.clone().slice([i..i + 1, j..j + 1]);
-        let new_value = old_value + 1;
-        bigram_counts = bigram_counts.slice_assign([i..i + 1, j..j + 1], new_value);
-    }
+    bigrams
 }
 
-fn get_chars(names: &Vec<&str>) -> Vec<char> {
+fn build_tensors(
+    bigram_counts: HashMap<String, i32>,
+    stoi: HashMap<char, usize>,
+) -> Tensor<MyAutodiffBackend, 2, Int> {
+    let mut bigram_tensor: Tensor<MyAutodiffBackend, 2, Int> =
+        Tensor::zeros([UNIQUE_CHAR_COUNT, UNIQUE_CHAR_COUNT]);
+    for (bigram, count) in bigram_counts {
+        let chars: Vec<char> = bigram.chars().collect();
+        let i = stoi[&chars[0]];
+        let j = stoi[&chars[1]];
+        let new_value = bigram_tensor.clone().slice([i..i + 1, j..j + 1]) + count;
+        bigram_tensor = bigram_tensor.slice_assign([i..i + 1, j..j + 1], new_value);
+    }
+
+    bigram_tensor
+}
+
+fn build_chars(names: &Vec<&str>) -> Vec<char> {
     let mut set_of_chars: HashSet<char> = names.iter().flat_map(|name| name.chars()).collect();
 
     // add start and end characters

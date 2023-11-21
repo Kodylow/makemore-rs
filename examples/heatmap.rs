@@ -20,7 +20,7 @@ const UNIQUE_CHAR_COUNT: usize = 28;
 fn main() {
     type MyBackend = WgpuBackend<AutoGraphicsApi, f32, i32>;
     type MyAutodiffBackend = ADBackendDecorator<MyBackend>;
-    let n: Tensor<MyAutodiffBackend, 2, Int> =
+    let _n: Tensor<MyAutodiffBackend, 2, Int> =
         Tensor::zeros([UNIQUE_CHAR_COUNT, UNIQUE_CHAR_COUNT]);
 
     let contents =
@@ -34,7 +34,7 @@ fn main() {
         .enumerate()
         .map(|(i, c)| (*c, i))
         .collect();
-    let itos: HashMap<usize, char> = sorted_chars
+    let _itos: HashMap<usize, char> = sorted_chars
         .iter()
         .enumerate()
         .map(|(i, c)| (i, *c))
