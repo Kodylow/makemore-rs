@@ -33,10 +33,6 @@ fn main() {
             *acc.entry(bigram.to_string()).or_default() += 1;
             acc
         });
-    // // sort counts
-    // let mut bigram_sort: Vec<(String, i32)> = bigram_counts.clone().into_iter().collect();
-    // bigram_sort.sort_by_key(|&(_, count)| -count);
-    // println!("bigram_sort: {:?}", bigram_sort);
 
     // create a tensor for each first char like Tensor(3,5,9) for aa:3, ab:5, ac:9
     let bigram_tensor = build_tensors(bigram_counts, stoi);
