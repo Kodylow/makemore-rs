@@ -29,8 +29,11 @@ fn main() {
     println!("bigram_counts: {:?}", bigram_counts);
 
     // create a normalized tensor of bigram counts
+    // burn automatically broadcasts to the correct shape which is sweet
     let bigrams_tensor = build_tensors(bigram_counts, stoi);
     let p = bigrams_tensor.slice([0..1]);
     let p = p.clone().div_scalar(p.sum().into_scalar());
-    println!("{:?}", p.to_data());
+
+    // Gets through timestamp 0:50 on the 2nd karpathy video
+    println!("Probabilities that letter starts a word: {:?}", p.to_data());
 }
