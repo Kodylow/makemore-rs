@@ -4,6 +4,7 @@ use makemore_rs::{build_bigrams, build_chars, build_tensors};
 
 const FILE_PATH: &str = "./makemore/names.txt";
 
+// Gets through timestamp 0:50 on makemore part 1
 fn main() {
     let contents = fs::read_to_string(FILE_PATH).expect("Something went wrong reading the file");
     let names: Vec<&str> = contents.lines().collect();
