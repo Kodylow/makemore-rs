@@ -29,7 +29,7 @@ fn main() {
         });
     println!("bigram_counts: {:?}", bigram_counts);
 
-    // create a normalized tensor of bigram counts
+    // create a normalized tensor of bigram probabilities
     // burn automatically broadcasts to the correct shape which is sweet
     let bigrams_tensor = build_tensors(bigram_counts, stoi);
     let p = bigrams_tensor.slice([0..1]);
