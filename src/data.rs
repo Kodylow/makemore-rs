@@ -1,7 +1,7 @@
 use candle_core::{Device, Result, Tensor};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
-use tracing::info;
+use tracing::{debug, info};
 
 #[derive(Clone, Debug)]
 pub struct NameItem {
@@ -35,7 +35,7 @@ impl NameBatcher {
             ),
             |(mut chars, mut targets), (idx, item)| {
                 if idx % 1000 == 0 {
-                    info!("Processing item {} of {}", idx, items.len());
+                    debug!("Processing item {} of {}", idx, items.len());
                 }
 
                 let mut char_seq = vec![0i64; max_len];
