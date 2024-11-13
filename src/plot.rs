@@ -5,29 +5,6 @@ use plotters::{
 };
 use std::collections::HashMap;
 
-/// Plots a heatmap visualization of character bigram frequencies in text data.
-///
-/// Bigrams are pairs of consecutive characters that appear in the text. Visualizing their frequencies
-/// helps understand:
-/// - Common character patterns and transitions in the language/names
-/// - Which character combinations never occur (structural zeros)
-/// - Potential phonetic rules and constraints
-/// - Start and end character distributions (using special <S> and <E> tokens)
-///
-/// The resulting heatmap shows:
-/// - X-axis: First character in bigram
-/// - Y-axis: Second character in bigram  
-/// - Cell color: Frequency of that bigram (darker red = more frequent)
-/// - Cell value: Exact count of occurrences
-///
-/// # Arguments
-/// * `b` - HashMap mapping character bigrams to their counts
-/// * `chars` - Vector of unique characters to show on axes
-/// * `char_to_idx` - Mapping from characters to their index positions
-/// * `output_path` - Where to save the plot image
-///
-/// # Returns
-/// * `Result<()>` - Ok if plot saved successfully, Err otherwise
 pub fn plot_bigram_heatmap(
     b: &HashMap<(String, String), i32>,
     chars: &[String],
@@ -87,9 +64,18 @@ pub fn plot_bigram_heatmap(
                 ))?;
 
                 plotting_area.draw(&Text::new(
+                    format!("{}{}", chars[i], chars[j]),
+                    (j as f32, i as f32 - 0.2),
+                    ("sans-serif", 10)
+                        .into_font()
+                        .color(&BLACK)
+                        .pos(Pos::new(HPos::Center, VPos::Center)),
+                ))?;
+
+                plotting_area.draw(&Text::new(
                     format!("{}", value as i32),
-                    (j as f32, i as f32),
-                    ("sans-serif", 12)
+                    (j as f32, i as f32 + 0.2),
+                    ("sans-serif", 10)
                         .into_font()
                         .color(&BLACK)
                         .pos(Pos::new(HPos::Center, VPos::Center)),

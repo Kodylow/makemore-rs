@@ -13,7 +13,7 @@ use tracing::{debug, info};
 ///
 /// This struct is used as the basic unit of data, containing a single name that can
 /// be processed for neural network training.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct NameItem {
     /// The actual name string
     pub name: String,
@@ -124,5 +124,13 @@ pub fn load_names(path: &str) -> Vec<NameItem> {
                 name: l.trim().to_string(),
             })
         })
+        .collect()
+}
+
+pub fn load_names_unique(path: &str) -> Vec<NameItem> {
+    load_names(path)
+        .into_iter()
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
         .collect()
 }
