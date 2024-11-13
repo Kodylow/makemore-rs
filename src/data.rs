@@ -28,62 +28,47 @@ impl NameBatcher {
         let max_len = items.iter().map(|item| item.name.len()).max().unwrap_or(0);
         info!("Max length: {}", max_len);
 
-        info!("Starting to process chars...");
-        let mut char_indices = Vec::with_capacity(items.len() * max_len);
-        for (idx, item) in items.iter().enumerate() {
-            if idx % 1000 == 0 {
-                info!("Processing char tensor {} of {}", idx, items.len());
-            }
+        let (chars, targets) = items.iter().enumerate().fold(
+            (
+                Vec::with_capacity(items.len() * max_len),
+                Vec::with_capacity(items.len() * max_len),
+            ),
+            |(mut chars, mut targets), (idx, item)| {
+                if idx % 1000 == 0 {
+                    info!("Processing item {} of {}", idx, items.len());
+                }
 
-            let mut sequence = vec![0i64; max_len];
-            for (i, c) in item.name.chars().enumerate() {
-                sequence[i] = c as u8 as i64;
-            }
-            char_indices.extend(sequence);
-        }
-        let chars = Tensor::from_vec(char_indices, (items.len(), max_len), &self.device)?;
-        info!("Finished processing chars");
+                let mut char_seq = vec![0i64; max_len];
+                let mut target_seq = vec![0i64; max_len];
 
-        info!("Starting to process targets...");
-        let mut target_indices = Vec::with_capacity(items.len() * max_len);
-        for (idx, item) in items.iter().enumerate() {
-            if idx % 1000 == 0 {
-                info!("Processing target tensor {} of {}", idx, items.len());
-            }
+                for (i, c) in item.name.chars().enumerate() {
+                    char_seq[i] = c as i64;
+                }
 
-            let mut sequence = vec![0i64; max_len];
-            for (i, c) in item.name.chars().skip(1).enumerate() {
-                sequence[i] = c as u8 as i64;
-            }
-            if item.name.len() < max_len {
-                sequence[item.name.len() - 1] = 0;
-            }
-            target_indices.extend(sequence);
-        }
-        let targets = Tensor::from_vec(target_indices, (items.len(), max_len), &self.device)?;
-        info!("Finished processing targets");
+                for (i, c) in item.name.chars().skip(1).enumerate() {
+                    target_seq[i] = c as i64;
+                }
+
+                chars.extend(char_seq);
+                targets.extend(target_seq);
+                (chars, targets)
+            },
+        );
+
+        let chars = Tensor::from_vec(chars, (items.len(), max_len), &self.device)?;
+        let targets = Tensor::from_vec(targets, (items.len(), max_len), &self.device)?;
 
         Ok(NameBatch { chars, targets })
     }
 }
 
 pub fn load_names(path: &str) -> Vec<NameItem> {
-    let file = File::open(path).expect("Failed to open names file");
-    let reader = BufReader::new(file);
-
-    let names: Vec<NameItem> = reader
+    BufReader::new(File::open(path).expect("Failed to open names file"))
         .lines()
         .filter_map(|line| {
-            let line = line.ok()?;
-            Some(NameItem {
-                name: line.trim().to_string(),
+            line.ok().map(|l| NameItem {
+                name: l.trim().to_string(),
             })
         })
-        .collect();
-
-    if names.is_empty() {
-        println!("Warning: No names were loaded!");
-    }
-
-    names
+        .collect()
 }
