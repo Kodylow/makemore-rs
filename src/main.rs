@@ -1,8 +1,6 @@
 use candle_core::Device;
-use data::{load_names, NameBatcher};
+use makemore_rs::data::{load_names, NameBatcher};
 use tracing::{info, warn};
-
-mod data;
 
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt()
