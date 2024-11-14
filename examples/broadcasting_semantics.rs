@@ -17,6 +17,10 @@ use candle_core::{DType, Device, Result, Tensor};
 ///    (5,3,4,1)     ->  5  3  4  1
 ///    (  3,1,1)     ->     3  1  1
 ///
+///    Which becomes broadcastable by:
+///    (5,3,4,1)     ->  5  3  4  1
+///    (  3,1,1)     ->  1  3  1  1
+///
 /// 2. Dimension Expansion:
 ///    Size-1 dims are stretched to match larger dims
 ///    (5,3,4,1)     ->  5  3  4  1
@@ -27,7 +31,33 @@ use candle_core::{DType, Device, Result, Tensor};
 ///    Final: (5,3,4,1)
 ///
 /// Keepdim is a boolean flag that determines whether the reduced dimensions should be preserved as size 1.
-/// This is useful in situations where you want to maintain the shape of the tensor after an operation.
+/// This is useful in situations where you want to maintain the shape of the tensor after an operation and
+/// will avoid some of the common pitfalls of broadcasting listed below.
+///
+/// Common Pitfalls:
+/// 1. Silent Dimension Addition:
+///    When broadcasting adds dimensions, it prepends them to the left:
+///    a = (3,4)          ->  1  3  4    // Silent 1 added
+///    b = (1,3,4)        ->  1  3  4
+///    result = (1,3,4)   // Not (3,4)!
+///
+/// 2. Unexpected Row/Column Operations:
+///    mean(x, dim=0) on (3,4):
+///    - Returns (4,)     // Column means
+///    - To get row means, use dim=1 -> (3,)
+///    - Or transpose first: x.T.mean(dim=1)
+///
+/// 3. Broadcasting vs Batching:
+///    (32,1,28,28) + (1,3,28,28):
+///    - Looks like batch_size=32, channels=3
+///    - Actually broadcasts to (32,3,28,28)
+///    - May silently compute wrong result
+///
+/// Best Practices:
+/// - Always check output shapes
+/// - Use shape assertions in critical code
+/// - Consider explicit reshapes over implicit broadcasting
+/// - Use keepdim=true to maintain dimensionality
 fn main() -> Result<()> {
     let device = Device::Cpu;
     println!("Broadcasting Semantics in Candle");
