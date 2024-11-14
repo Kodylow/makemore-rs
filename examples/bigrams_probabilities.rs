@@ -11,14 +11,15 @@ fn main() -> Result<()> {
     let mut model = BigramModel::new(&names);
 
     model.train_tensor(&names, &device)?;
+    model.normalize_probabilities()?;
 
-    info!("Bigram counts: {:?}", model.counts);
+    info!("Bigram probabilities: {:?}", model.get_probabilities_map()?);
     plot_bigram_heatmap(
-        &model.counts,
+        &model.get_probabilities_map()?,
         &model.chars,
         &model.char_to_idx,
-        "bigrams_tensor.png",
-        "Bigram Counts",
+        "bigrams_probabilities.png",
+        "Bigram Probabilities",
     )?;
     Ok(())
 }

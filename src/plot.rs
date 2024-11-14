@@ -5,11 +5,12 @@ use plotters::{
 };
 use std::collections::HashMap;
 
-pub fn plot_bigram_heatmap(
-    b: &HashMap<(String, String), i32>,
+pub fn plot_bigram_heatmap<T: Into<f64> + Copy>(
+    b: &HashMap<(String, String), T>,
     chars: &[String],
     char_to_idx: &HashMap<String, usize>,
     output_path: &str,
+    title: &str,
 ) -> Result<()> {
     let n = chars.len();
 
@@ -18,7 +19,7 @@ pub fn plot_bigram_heatmap(
     for ((ch1, ch2), count) in b {
         let i = char_to_idx[ch1];
         let j = char_to_idx[ch2];
-        data[i][j] = *count as f64;
+        data[i][j] = (*count).into();
     }
 
     let root = BitMapBackend::new(output_path, (1200, 1000)).into_drawing_area();
@@ -27,7 +28,7 @@ pub fn plot_bigram_heatmap(
     let max_val = data.iter().flatten().fold(0.0_f64, |a, &b| a.max(b));
 
     let mut chart = ChartBuilder::on(&root)
-        .caption("Bigram Frequencies", ("sans-serif", 30))
+        .caption(title, ("sans-serif", 30))
         .margin(60)
         .x_label_area_size(60)
         .y_label_area_size(60)
@@ -73,7 +74,11 @@ pub fn plot_bigram_heatmap(
                 ))?;
 
                 plotting_area.draw(&Text::new(
-                    format!("{}", value as i32),
+                    if value >= 1.0 {
+                        format!("{}", value as i32)
+                    } else {
+                        format!("{:.3}", value)
+                    },
                     (j as f32, i as f32 + 0.2),
                     ("sans-serif", 10)
                         .into_font()

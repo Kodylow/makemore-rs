@@ -16,6 +16,7 @@ fn main() -> Result<()> {
         &model.chars,
         &model.char_to_idx,
         "bigrams.png",
+        "Bigram Counts",
     )?;
     Ok(())
 }

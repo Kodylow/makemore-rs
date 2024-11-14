@@ -9,6 +9,7 @@ pub struct BigramModel {
     pub char_to_idx: HashMap<String, usize>,
     pub counts: HashMap<(String, String), i32>,
     tensor: Option<Tensor>,
+    probabilities: Option<Tensor>,
 }
 
 impl BigramModel {
@@ -21,6 +22,7 @@ impl BigramModel {
             char_to_idx,
             counts: HashMap::new(),
             tensor: None,
+            probabilities: None,
         }
     }
 
@@ -66,6 +68,10 @@ impl BigramModel {
 
     pub fn get_tensor(&self) -> Option<&Tensor> {
         self.tensor.as_ref()
+    }
+
+    pub fn get_probabilities(&self) -> Option<&Tensor> {
+        self.probabilities.as_ref()
     }
 
     fn update_counts_from_tensor(&mut self) -> Result<()> {
@@ -114,5 +120,36 @@ impl BigramModel {
             .enumerate()
             .map(|(i, c)| (c.clone(), i))
             .collect()
+    }
+
+    pub fn normalize_probabilities(&mut self) -> Result<()> {
+        let tensor = self.tensor.as_ref().unwrap();
+
+        // Convert to f32
+        let probs = tensor.to_dtype(DType::F32)?;
+
+        // Sum along rows and broadcast for division
+        let row_sums = probs.sum_keepdim(1)?;
+        let normalized = probs.broadcast_div(&row_sums)?;
+
+        // Store the normalized probabilities
+        self.probabilities = Some(normalized);
+        Ok(())
+    }
+
+    pub fn get_probabilities_map(&self) -> Result<HashMap<(String, String), f32>> {
+        let probs = self.probabilities.as_ref().unwrap();
+        let vocab_size = self.chars.len();
+
+        let mut map = HashMap::new();
+        for i in 0..vocab_size {
+            for j in 0..vocab_size {
+                let prob = probs.i((i, j))?.to_scalar::<f32>()?;
+                if prob > 0.0 {
+                    map.insert((self.chars[i].clone(), self.chars[j].clone()), prob);
+                }
+            }
+        }
+        Ok(map)
     }
 }
