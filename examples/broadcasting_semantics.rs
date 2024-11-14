@@ -1,7 +1,5 @@
 use candle_core::{DType, Device, Result, Tensor};
 
-/// This example demonstrates broadcasting semantics in the Candle framework.
-///
 /// Broadcasting allows operations between tensors of different shapes by following these rules:
 /// 1. Dimensions are matched from right to left
 /// 2. Each dimension pair must either:
