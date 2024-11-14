@@ -5,7 +5,7 @@ use makemore_rs::data::load_names_unique;
 use tracing::info;
 
 fn main() -> Result<()> {
-    makemore_rs::init_logging();
+    makemore_rs::utils::init_logging();
     let device = Device::Cpu;
 
     // Create a simple probability distribution like in the PyTorch example
@@ -13,9 +13,7 @@ fn main() -> Result<()> {
     info!("Probs: {:?}", probs);
     // Create and train the model
     let names = load_names_unique("./names.txt");
-    let mut model = BigramModel::new(&names);
-    model.compute_tensor_frequencies(&names, &device)?;
-    model.compute_probabilities()?;
+    let model = BigramModel::new(&names, &device)?;
 
     // Test basic multinomial sampling
     info!("Sampling from test distribution:");

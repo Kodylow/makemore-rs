@@ -6,13 +6,10 @@ use makemore_rs::plot::plot_bigram_heatmap;
 use tracing::info;
 
 fn main() -> Result<()> {
-    makemore_rs::init_logging();
+    makemore_rs::utils::init_logging();
     let device = Device::Cpu;
     let names = load_names_unique("./names.txt");
-    let mut model = BigramModel::new(&names);
-
-    model.compute_tensor_frequencies(&names, &device)?;
-    model.compute_probabilities()?;
+    let model = BigramModel::new(&names, &device)?;
 
     info!("Bigram probabilities: {:?}", model.get_probabilities());
     plot_bigram_heatmap(

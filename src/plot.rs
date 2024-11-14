@@ -5,6 +5,58 @@ use plotters::{
 };
 use std::collections::HashMap;
 
+/// Creates a heatmap visualization of bigram data, showing the relationships between character pairs.
+///
+/// This function generates a detailed heatmap visualization where each cell represents a bigram (pair of characters)
+/// and its corresponding value (frequency, probability, etc.). The heatmap uses color intensity to represent
+/// the magnitude of values, with darker red indicating higher values.
+///
+/// # Features
+/// - Color-coded cells with intensity proportional to the bigram value
+/// - Character pair labels showing the actual bigram combinations
+/// - Numeric values displayed for each non-zero bigram
+/// - Customizable title and output path
+/// - Automatic scaling based on maximum value in the dataset
+///
+/// # Arguments
+/// * `b` - HashMap containing bigram pairs as keys (tuple of strings) and their corresponding values
+/// * `chars` - Vector of strings representing the character vocabulary
+/// * `char_to_idx` - HashMap mapping characters to their indices in the vocabulary
+/// * `output_path` - Path where the output image will be saved
+/// * `title` - Title to be displayed on the heatmap
+///
+/// # Type Parameters
+/// * `T` - Numeric type that can be converted to f64 (e.g., i32, f32, f64)
+///
+/// # Returns
+/// * `Result<()>` - Ok(()) if the heatmap was successfully generated and saved, Error otherwise
+///
+/// # Example
+/// ```no_run
+/// use std::collections::HashMap;
+/// use makemore_rs::plot::plot_bigram_heatmap;
+///
+/// let mut bigrams = HashMap::new();
+/// bigrams.insert(("a".to_string(), "b".to_string()), 10);
+///
+/// let chars = vec!["a".to_string(), "b".to_string()];
+/// let mut char_to_idx = HashMap::new();
+/// char_to_idx.insert("a".to_string(), 0);
+/// char_to_idx.insert("b".to_string(), 1);
+///
+/// plot_bigram_heatmap(&bigrams, &chars, &char_to_idx, "heatmap.png", "Bigram Analysis")
+///     .expect("Failed to create heatmap");
+/// ```
+///
+/// # Implementation Details
+/// - Uses a 1200x1000 pixel bitmap canvas
+/// - Draws a grid where each cell represents a possible character pair
+/// - For non-zero values:
+///   - Colors the cell with red intensity based on the value
+///   - Displays the character pair above the center
+///   - Shows the numeric value below the center
+/// - Integer values are displayed without decimals
+/// - Float values are displayed with 3 decimal places
 pub fn plot_bigram_heatmap<T: Into<f64> + Copy>(
     b: &HashMap<(String, String), T>,
     chars: &[String],
