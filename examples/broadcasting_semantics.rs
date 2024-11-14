@@ -11,6 +11,21 @@ use candle_core::{DType, Device, Result, Tensor};
 /// - Right-to-left: 1==1, 4>1 (broadcast), 3==3, 5 has no pair (broadcast)
 /// - Result shape: (5,3,4,1)
 ///
+/// Broadcasting Mechanics:
+/// 1. Right Alignment:
+///    Shapes are aligned on their right edges
+///    (5,3,4,1)     ->  5  3  4  1
+///    (  3,1,1)     ->     3  1  1
+///
+/// 2. Dimension Expansion:
+///    Size-1 dims are stretched to match larger dims
+///    (5,3,4,1)     ->  5  3  4  1
+///    (3,1,1)       ->  -  3  4  1  
+///
+/// 3. Missing Dimension Handling:
+///    Missing dims (marked -) are treated as 1 and broadcast
+///    Final: (5,3,4,1)
+///
 /// Keepdim is a boolean flag that determines whether the reduced dimensions should be preserved as size 1.
 /// This is useful in situations where you want to maintain the shape of the tensor after an operation.
 fn main() -> Result<()> {
