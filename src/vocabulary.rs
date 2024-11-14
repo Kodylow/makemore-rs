@@ -92,6 +92,10 @@ impl Vocabulary {
         chars
     }
 
+    pub fn get_char(&self, ix: usize) -> &String {
+        &self.chars[ix]
+    }
+
     /// Returns a reference to the vector of characters in the vocabulary.
     ///
     /// The characters are sorted alphabetically with "." always first.

@@ -7,7 +7,7 @@ use anyhow::Result;
 use candle_core::{DType, Device, IndexOp, Tensor};
 use rand::Rng;
 use std::collections::HashMap;
-use tracing::info;
+use tracing::debug;
 
 /// A statistical model that captures the frequencies and probabilities
 /// of character pairs (bigrams) in text data.
@@ -48,7 +48,22 @@ impl BigramModel {
         // Compute probabilities
         let probs = count_tensor.to_dtype(DType::F32)?;
         let row_sums = probs.sum_keepdim(1)?;
+        debug!(
+            "Row sums shape: {:?}, values: {:?}",
+            row_sums.dims(),
+            row_sums.to_vec2::<f32>()?
+        );
+
         let probabilities = probs.broadcast_div(&row_sums)?;
+        debug!("Probability tensor shape: {:?}", probabilities.dims());
+        debug!(
+            "First row probabilities sum: {}",
+            probabilities
+                .i((0, 0..))?
+                .to_vec1::<f32>()?
+                .iter()
+                .sum::<f32>()
+        );
 
         // Compute hashmap counts
         let counts = (0..vocab_size)
@@ -135,60 +150,73 @@ impl BigramModel {
         num_samples: i64,
         replacement: bool,
     ) -> Result<Tensor> {
-        info!(
-            "Starting multinomial sampling with {} samples, replacement: {}",
-            num_samples, replacement
-        );
         let device = probs.device();
         let mut p = if probs.dims().len() > 1 {
-            probs.flatten_all()?.to_vec1::<f32>()?
+            debug!(
+                "Flattening probabilities tensor of shape {:?}",
+                probs.dims()
+            );
+            let flat = probs.flatten_all()?.to_vec1::<f32>()?;
+            // Normalize the flattened probabilities
+            let sum: f32 = flat.iter().sum();
+            flat.iter().map(|&x| x / sum).collect::<Vec<_>>()
         } else {
-            probs.to_vec1::<f32>()?
+            let p = probs.to_vec1::<f32>()?;
+            let sum: f32 = p.iter().sum();
+            p.iter().map(|&x| x / sum).collect::<Vec<_>>()
         };
 
-        if !replacement && num_samples > p.len() as i64 {
-            return Err(anyhow::anyhow!(
-                "Cannot sample {} items without replacement from tensor of length {}",
-                num_samples,
-                p.len()
-            ));
-        }
+        debug!(
+            "Initial probability distribution sum: {}",
+            p.iter().sum::<f32>()
+        );
 
         let mut samples = Vec::with_capacity(num_samples as usize);
         let mut rng = rand::thread_rng();
 
-        // Create cumulative probabilities once
-        let mut cumulative = vec![0.0; p.len()];
-        let mut sum = 0.0;
-        for (i, &prob) in p.iter().enumerate() {
-            sum += prob;
-            cumulative[i] = sum;
-        }
+        for sample_idx in 0..num_samples {
+            // Recompute cumulative probabilities each time
+            let mut cumulative = vec![0.0; p.len()];
+            let mut sum = 0.0;
+            for (i, &prob) in p.iter().enumerate() {
+                sum += prob;
+                cumulative[i] = sum;
+            }
+            debug!("Sample {}: Cumulative sum: {}", sample_idx, sum);
 
-        for _ in 0..num_samples {
-            let r: f32 = rng.gen::<f32>() * sum;
+            let r: f32 = rng.gen::<f32>();
+            debug!("Sample {}: Random value: {}", sample_idx, r);
 
-            // Binary search for the index
             let selected_idx =
                 match cumulative.binary_search_by(|&cum| cum.partial_cmp(&r).unwrap()) {
                     Ok(idx) => idx,
                     Err(idx) => idx,
                 };
 
+            debug!(
+                "Sample {}: Selected index: {}, Probability: {}",
+                sample_idx, selected_idx, p[selected_idx]
+            );
             samples.push(selected_idx as i64);
 
             if !replacement {
-                // Update cumulative probabilities
-                sum -= p[selected_idx];
+                // Zero out the selected probability and renormalize
                 p[selected_idx] = 0.0;
-                let mut running_sum = 0.0;
-                for (i, &prob) in p.iter().enumerate() {
-                    running_sum += prob;
-                    cumulative[i] = running_sum;
+                let new_sum: f32 = p.iter().sum();
+                if new_sum > 0.0 {
+                    for prob in p.iter_mut() {
+                        *prob /= new_sum;
+                    }
+                    debug!(
+                        "Sample {}: Renormalized distribution sum: {}",
+                        sample_idx,
+                        p.iter().sum::<f32>()
+                    );
                 }
             }
         }
 
+        debug!("Final samples: {:?}", samples);
         Tensor::new(samples.as_slice(), device).map_err(|e| e.into())
     }
 

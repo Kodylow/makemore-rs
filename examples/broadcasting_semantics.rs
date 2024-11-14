@@ -1,6 +1,10 @@
 use candle_core::{DType, Device, Result, Tensor};
 
-/// Broadcasting allows operations between tensors of different shapes by following these rules:
+/// Broadcasting allows operations between tensors of different shapes by following these rules.
+///
+/// Broadcasting can introduce very subtle and hard to find bugs, so check your work!
+///
+/// Broadcasting Rules:
 /// 1. Dimensions are matched from right to left
 /// 2. Each dimension pair must either:
 ///    - Be exactly equal
@@ -31,7 +35,7 @@ use candle_core::{DType, Device, Result, Tensor};
 ///    Final: (5,3,4,1)
 ///
 /// Keepdim is a boolean flag that determines whether the reduced dimensions should be preserved as size 1.
-/// This is useful in situations where you want to maintain the shape of the tensor after an operation and
+/// Keepdim is useful in situations where you want to maintain the shape of the tensor after an operation and
 /// will avoid some of the common pitfalls of broadcasting listed below.
 ///
 /// Common Pitfalls:
