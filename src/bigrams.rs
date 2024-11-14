@@ -1,3 +1,6 @@
+//! Bigram language model implementation that tracks character pair frequencies
+//! and their probabilities in a given dataset.
+
 use crate::data::NameItem;
 use crate::vocabulary::Vocabulary;
 use anyhow::Result;
@@ -6,20 +9,26 @@ use rand::Rng;
 use std::collections::HashMap;
 use tracing::info;
 
+/// A statistical model that captures the frequencies and probabilities
+/// of character pairs (bigrams) in text data.
 #[derive(Debug, Clone)]
 pub struct BigramModel {
     vocabulary: Vocabulary,
     counts: HashMap<(String, String), i32>,
-    tensor: Option<Tensor>,
+    count_tensor: Option<Tensor>,
     probabilities: Option<Tensor>,
 }
 
 impl BigramModel {
+    /// Creates a new BigramModel with an initialized vocabulary from the given names.
+    ///
+    /// # Arguments
+    /// * `names` - Slice of name items used to build the vocabulary
     pub fn new(names: &[NameItem]) -> Self {
         Self {
             vocabulary: Vocabulary::new(names),
             counts: HashMap::new(),
-            tensor: None,
+            count_tensor: None,
             probabilities: None,
         }
     }
@@ -37,47 +46,57 @@ impl BigramModel {
     }
 
     pub fn get_tensor(&self) -> Option<&Tensor> {
-        self.tensor.as_ref()
+        self.count_tensor.as_ref()
     }
 
     pub fn get_probabilities(&self) -> Option<&Tensor> {
         self.probabilities.as_ref()
     }
 
-    pub fn train_hashmap(&mut self, names: &[NameItem]) {
+    pub fn get_probabilities_map(&self) -> Option<HashMap<(String, String), f32>> {
+        let chars = self.vocabulary.get_chars();
+        self.probabilities.as_ref().and_then(|p| {
+            p.to_dtype(DType::F32)
+                .ok()?
+                .to_vec2::<f32>()
+                .ok()
+                .map(|data| {
+                    data.iter()
+                        .enumerate()
+                        .flat_map(|(i, row)| {
+                            row.iter()
+                                .enumerate()
+                                .map(move |(j, &v)| ((chars[i].clone(), chars[j].clone()), v))
+                        })
+                        .collect()
+                })
+        })
+    }
+
+    /// Computes bigram frequencies using a HashMap-based approach.
+    ///
+    /// # Arguments
+    /// * `names` - Slice of name items to analyze
+    pub fn compute_hashmap_frequencies(&mut self, names: &[NameItem]) {
         self.counts = Self::compute_bigram_counts(names);
     }
 
-    fn compute_bigram_counts(names: &[NameItem]) -> HashMap<(String, String), i32> {
-        names
-            .iter()
-            .flat_map(|name| {
-                let chars: Vec<_> = name.name.chars().map(|c| c.to_string()).collect();
-                let tokens = Self::tokenize(&chars).into_iter();
-                tokens.clone().zip(tokens.skip(1))
-            })
-            .fold(HashMap::new(), |mut acc, (t1, t2)| {
-                *acc.entry((t1, t2)).or_insert(0) += 1;
-                acc
-            })
-    }
-
-    fn tokenize(chars: &[String]) -> Vec<String> {
-        std::iter::once(".".to_string())
-            .chain(chars.iter().cloned())
-            .chain(std::iter::once(".".to_string()))
-            .collect()
-    }
-
-    pub fn train_tensor(&mut self, names: &[NameItem], device: &Device) -> Result<()> {
+    /// Computes bigram frequencies using a tensor-based approach.
+    ///
+    /// # Arguments
+    /// * `names` - Slice of name items to analyze
+    /// * `device` - Device to store the tensor on (CPU/GPU)
+    pub fn compute_tensor_frequencies(
+        &mut self,
+        names: &[NameItem],
+        device: &Device,
+    ) -> Result<()> {
         let vocab_size = self.vocabulary.get_size();
         let mut bigram_tensor = Tensor::zeros((vocab_size, vocab_size), DType::F32, device)?;
 
         for name in names {
-            let tokens: Vec<String> = std::iter::once(".".to_string())
-                .chain(name.name.chars().map(|c| c.to_string()))
-                .chain(std::iter::once(".".to_string()))
-                .collect();
+            let tokens =
+                Self::tokenize(&name.name.chars().map(|c| c.to_string()).collect::<Vec<_>>());
 
             for window in tokens.windows(2) {
                 let char_to_idx = self.vocabulary.get_char_to_idx();
@@ -89,69 +108,31 @@ impl BigramModel {
             }
         }
 
-        self.tensor = Some(bigram_tensor);
-        self.update_counts_from_tensor()?;
+        self.count_tensor = Some(bigram_tensor);
+        self.sync_counts_from_tensor()?;
         Ok(())
     }
 
-    fn update_counts_from_tensor(&mut self) -> Result<()> {
-        let vocab_size = self.vocabulary.get_size();
-        let tensor = self.tensor.as_ref().unwrap();
-
-        self.counts = (0..vocab_size)
-            .flat_map(|i| {
-                let chars = self.vocabulary.get_chars();
-                (0..vocab_size).filter_map(move |j| {
-                    let count = tensor.i((i, j)).as_ref().ok()?.to_scalar::<f32>().ok()? as i32;
-                    if count > 0 {
-                        Some(((chars[i].clone(), chars[j].clone()), count))
-                    } else {
-                        None
-                    }
-                })
-            })
-            .collect();
-
-        Ok(())
-    }
-
-    pub fn normalize_probabilities(&mut self) -> Result<()> {
-        let tensor = self.tensor.as_ref().unwrap();
-
-        // Convert to f32
+    /// Converts raw frequencies into probabilities by normalizing each row
+    /// to sum to 1.0.
+    pub fn compute_probabilities(&mut self) -> Result<()> {
+        let tensor = self.count_tensor.as_ref().unwrap();
         let probs = tensor.to_dtype(DType::F32)?;
-
-        // Sum along rows and broadcast for division
         let row_sums = probs.sum_keepdim(1)?;
         let normalized = probs.broadcast_div(&row_sums)?;
-
-        // Store the normalized probabilities
         self.probabilities = Some(normalized);
         Ok(())
     }
 
-    pub fn get_probabilities_map(&self) -> Result<HashMap<(String, String), f32>> {
-        let probs = self.probabilities.as_ref().unwrap();
-        let vocab_size = self.vocabulary.get_size();
-
-        let mut map = HashMap::new();
-        for i in 0..vocab_size {
-            for j in 0..vocab_size {
-                let prob = probs.i((i, j))?.to_scalar::<f32>()?;
-                if prob > 0.0 {
-                    map.insert(
-                        (
-                            self.vocabulary.get_chars()[i].clone(),
-                            self.vocabulary.get_chars()[j].clone(),
-                        ),
-                        prob,
-                    );
-                }
-            }
-        }
-        Ok(map)
-    }
-
+    /// Samples indices from a probability distribution using the multinomial distribution.
+    ///
+    /// # Arguments
+    /// * `probs` - Tensor containing probabilities
+    /// * `num_samples` - Number of samples to draw
+    /// * `replacement` - Whether to sample with replacement
+    ///
+    /// # Returns
+    /// * Tensor containing sampled indices
     pub fn multinomial(
         &self,
         probs: &Tensor,
@@ -213,5 +194,49 @@ impl BigramModel {
         }
 
         Tensor::new(samples.as_slice(), device).map_err(|e| e.into())
+    }
+
+    // Private helper methods below
+
+    fn compute_bigram_counts(names: &[NameItem]) -> HashMap<(String, String), i32> {
+        names
+            .iter()
+            .flat_map(|name| {
+                let chars: Vec<_> = name.name.chars().map(|c| c.to_string()).collect();
+                let tokens = Self::tokenize(&chars).into_iter();
+                tokens.clone().zip(tokens.skip(1))
+            })
+            .fold(HashMap::new(), |mut acc, (t1, t2)| {
+                *acc.entry((t1, t2)).or_insert(0) += 1;
+                acc
+            })
+    }
+
+    fn tokenize(chars: &[String]) -> Vec<String> {
+        std::iter::once(".".to_string())
+            .chain(chars.iter().cloned())
+            .chain(std::iter::once(".".to_string()))
+            .collect()
+    }
+
+    fn sync_counts_from_tensor(&mut self) -> Result<()> {
+        let vocab_size = self.vocabulary.get_size();
+        let tensor = self.count_tensor.as_ref().unwrap();
+
+        self.counts = (0..vocab_size)
+            .flat_map(|i| {
+                let chars = self.vocabulary.get_chars();
+                (0..vocab_size).filter_map(move |j| {
+                    let count = tensor.i((i, j)).as_ref().ok()?.to_scalar::<f32>().ok()? as i32;
+                    if count > 0 {
+                        Some(((chars[i].clone(), chars[j].clone()), count))
+                    } else {
+                        None
+                    }
+                })
+            })
+            .collect();
+
+        Ok(())
     }
 }

@@ -11,7 +11,7 @@ fn main() -> Result<()> {
     let names = load_names_unique("./names.txt");
     let mut model = BigramModel::new(&names);
 
-    model.train_tensor(&names, &device)?;
+    model.compute_tensor_frequencies(&names, &device)?;
 
     info!("Bigram counts: {:?}", model.get_counts());
     plot_bigram_heatmap(

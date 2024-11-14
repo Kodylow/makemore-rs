@@ -11,12 +11,12 @@ fn main() -> Result<()> {
     let names = load_names_unique("./names.txt");
     let mut model = BigramModel::new(&names);
 
-    model.train_tensor(&names, &device)?;
-    model.normalize_probabilities()?;
+    model.compute_tensor_frequencies(&names, &device)?;
+    model.compute_probabilities()?;
 
-    info!("Bigram probabilities: {:?}", model.get_probabilities_map()?);
+    info!("Bigram probabilities: {:?}", model.get_probabilities());
     plot_bigram_heatmap(
-        &model.get_probabilities_map()?,
+        &model.get_probabilities_map().unwrap(),
         model.get_chars(),
         model.get_vocabulary().get_char_to_idx(),
         "bigrams_probabilities.png",

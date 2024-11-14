@@ -14,8 +14,8 @@ fn main() -> Result<()> {
     // Create and train the model
     let names = load_names_unique("./names.txt");
     let mut model = BigramModel::new(&names);
-    model.train_tensor(&names, &device)?;
-    model.normalize_probabilities()?;
+    model.compute_tensor_frequencies(&names, &device)?;
+    model.compute_probabilities()?;
 
     // Test basic multinomial sampling
     info!("Sampling from test distribution:");

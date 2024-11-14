@@ -9,7 +9,7 @@ fn main() -> Result<()> {
     let names = load_names_unique("./names.txt");
     let mut model = BigramModel::new(&names);
 
-    model.train_hashmap(&names);
+    model.compute_hashmap_frequencies(&names);
 
     info!("Bigram counts: {:?}", model.get_counts());
     plot_bigram_heatmap(
