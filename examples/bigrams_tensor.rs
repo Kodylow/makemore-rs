@@ -6,17 +6,18 @@ use makemore_rs::plot::plot_bigram_heatmap;
 use tracing::info;
 
 fn main() -> Result<()> {
+    makemore_rs::init_logging();
     let device = Device::Cpu;
     let names = load_names_unique("./names.txt");
     let mut model = BigramModel::new(&names);
 
     model.train_tensor(&names, &device)?;
 
-    info!("Bigram counts: {:?}", model.counts);
+    info!("Bigram counts: {:?}", model.get_counts());
     plot_bigram_heatmap(
-        &model.counts,
-        &model.chars,
-        &model.char_to_idx,
+        model.get_counts(),
+        model.get_chars(),
+        model.get_vocabulary().get_char_to_idx(),
         "bigrams_tensor.png",
         "Bigram Counts",
     )?;

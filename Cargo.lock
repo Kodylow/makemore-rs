@@ -861,6 +861,7 @@ dependencies = [
  "candle-nn",
  "clap",
  "plotters",
+ "rand",
  "serde",
  "serde_json",
  "tracing",

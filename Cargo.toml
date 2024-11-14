@@ -15,3 +15,4 @@ tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 candle-core = "0.8.0"
 candle-nn = "0.8.0"
+rand = "0.8.5"
