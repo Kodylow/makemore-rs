@@ -10,6 +10,9 @@ use candle_core::{DType, Device, Result, Tensor};
 /// For example, broadcasting shapes (5,3,4,1) + (3,1,1):
 /// - Right-to-left: 1==1, 4>1 (broadcast), 3==3, 5 has no pair (broadcast)
 /// - Result shape: (5,3,4,1)
+///
+/// Keepdim is a boolean flag that determines whether the reduced dimensions should be preserved as size 1.
+/// This is useful in situations where you want to maintain the shape of the tensor after an operation.
 fn main() -> Result<()> {
     let device = Device::Cpu;
     println!("Broadcasting Semantics in Candle");
@@ -98,6 +101,67 @@ fn main() -> Result<()> {
     let z_div = x.broadcast_div(&y)?;
     println!("Multiplication result: {:?}", z_mul.shape());
     println!("Division result: {:?}\n", z_div.shape());
+
+    // Example 8: Keepdim Basics
+    // keepdim=true preserves reduced dimensions as size 1
+    let x = Tensor::arange(0f32, 6f32, &device)?.reshape((2, 3))?;
+    println!("\nKeepdim Operations");
+    println!("Original shape: {:?}", x.shape());
+    println!("x = \n{}", x);
+
+    // Without keepdim - dimension is removed
+    let sum_no_keepdim = x.sum(1)?;
+    println!("\nSum without keepdim (dim=1): \n{}", sum_no_keepdim);
+    println!("Shape: {:?}", sum_no_keepdim.shape());
+
+    // With keepdim - dimension is preserved as size 1
+    let sum_keepdim = x.sum_keepdim(1)?;
+    println!("\nSum with keepdim (dim=1): \n{}", sum_keepdim);
+    println!("Shape: {:?}", sum_keepdim.shape());
+
+    // Example 9: Multiple Keepdim Operations
+    let x = Tensor::arange(0f32, 24f32, &device)?.reshape((2, 3, 4))?;
+    println!("\nMultiple Keepdim Operations");
+    println!("Original shape: {:?}", x.shape());
+
+    // Chain of keepdim operations preserves broadcasting ability
+    let result = x
+        .max_keepdim(1)? // Reduces dim 1, keeps shape (2, 1, 4)
+        .mean_keepdim(2)?; // Reduces dim 2, keeps shape (2, 1, 1)
+    println!(
+        "After max_keepdim(1) -> mean_keepdim(2): {:?}",
+        result.shape()
+    );
+
+    // Example 10: Broadcasting with Keepdim
+    println!("\nBroadcasting with Keepdim");
+    let x = Tensor::arange(0f32, 12f32, &device)?.reshape((3, 4))?;
+    println!("Original: {:?}", x.shape());
+
+    // Create (3,1) tensor using keepdim
+    let row_means = x.mean_keepdim(1)?;
+    println!("Row means (keepdim): {:?}", row_means.shape());
+
+    // Broadcasting (3,4) - (3,1) -> (3,4)
+    let centered = x.broadcast_sub(&row_means)?;
+    println!("After broadcasting subtraction: {:?}", centered.shape());
+
+    // Example 11: Complex Broadcasting + Keepdim
+    println!("\nComplex Broadcasting + Keepdim");
+    let x = Tensor::arange(0f32, 24f32, &device)?.reshape((2, 3, 4))?;
+
+    // Create tensors with different keepdim axes
+    let a = x.max_keepdim(0)?; // Shape: (1, 3, 4)
+    let b = x.mean_keepdim(1)?; // Shape: (2, 1, 4)
+    let c = x.sum_keepdim(2)?; // Shape: (2, 3, 1)
+
+    // Broadcast all three together
+    let result = a.broadcast_add(&b)?.broadcast_add(&c)?;
+    println!("Broadcasting shapes:");
+    println!("  {:?} (max_keepdim(0))", a.shape());
+    println!("  {:?} (mean_keepdim(1))", b.shape());
+    println!("  {:?} (sum_keepdim(2))", c.shape());
+    println!("Result: {:?}", result.shape());
 
     Ok(())
 }
