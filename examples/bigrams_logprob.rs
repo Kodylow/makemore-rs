@@ -36,6 +36,7 @@ fn main() -> Result<()> {
         #[allow(unused_assignments)]
         let mut ix = 0;
         let mut prev_ix = 0;
+        let mut log_likelihood = 0.0;
 
         info!("New name:");
         loop {
@@ -48,7 +49,7 @@ fn main() -> Result<()> {
             let ch2 = model.get_vocabulary().get_char(ix);
             let prob = probs.get(prev_ix)?.get(ix)?;
             let logprob = prob.log()?;
-
+            log_likelihood += logprob.to_vec0::<f32>()?;
             // Print the bigram and its probabilities
             info!(
                 "  {}{}: prob={:.4}, logprob={:.4}",
@@ -70,6 +71,7 @@ fn main() -> Result<()> {
             "Generated: {}",
             name.iter().map(|c| c.as_str()).collect::<String>()
         );
+        info!("Log likelihood: {}", log_likelihood);
         info!("---");
     }
 
