@@ -6,7 +6,7 @@
 //! - Building training pairs for sequence prediction
 //! - Basic tensor operations with the Candle library
 
-use candle_core::{DType, Device, Tensor};
+use candle_core::{DType, Device, IndexOp, Tensor};
 
 /// Main entry point that demonstrates character encoding and one-hot vector creation
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -18,10 +18,31 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ys_tensor = Tensor::new(ys, &device)?;
     let xenc = create_one_hot_encoding(&xs_tensor, 27, &device)?;
 
-    println!("xs: {:?}", xs_tensor);
-    println!("ys: {:?}", ys_tensor);
-    println!("xenc shape: {:?}", xenc.shape());
-    println!("xenc: {:?}", xenc.to_vec2::<f32>()?);
+    // println!("xs: {:?}", xs_tensor);
+    // println!("ys: {:?}", ys_tensor);
+    // println!("xenc shape: {:?}", xenc.shape());
+    // println!("xenc: {:?}", xenc.to_vec2::<f32>()?);
+
+    let w = Tensor::randn(0f32, 1f32, (27, 27), &device)?;
+    // println!("W: {:?}", w.to_vec2::<f32>()?);
+
+    // Multiply xenc by w to get logits (log counts)
+    // (5,27) @ (27,27) = (5,27)
+    let logits = xenc.matmul(&w)?;
+    // println!("logits shape: {:?}", logits.shape());
+    // println!("logits: {:?}", logits.to_vec2::<f32>()?);
+
+    // Get value at position [3, 13] from logits
+    // This is the "firing rate" for the 13th neuron looking at the 3rd input
+    // It's the dot product of the 3rd input vector and the 13th column of W
+    // let value = verify_matrix_multiplication(&xenc, &logits, &w, 3, 13)?;
+    // println!("Verified value at [3, 13]: {}", value);
+
+    // Convert logits to probabilities using softmax
+    let probs = apply_softmax(&logits)?;
+    println!("probs shape: {:?}", probs.shape());
+    println!("probs: {:?}", probs.to_vec2::<f32>()?);
+    println!("probs sum: {:?}", probs.sum(1)?.to_vec1::<f32>()?);
 
     Ok(())
 }
@@ -114,4 +135,90 @@ fn char_to_index(c: char) -> i64 {
         'a'..='z' => (c as u8 - b'a' + 1) as i64,
         _ => panic!("Unexpected character: {}", c),
     }
+}
+
+/// Verifies that manual dot product calculation matches tensor operations
+///
+/// This function demonstrates and validates that our tensor operations are working correctly by:
+/// 1. Extracting a specific value from the result of a matrix multiplication
+/// 2. Manually calculating the same value using dot product
+/// 3. Comparing the results to ensure they match
+///
+/// This is useful for:
+/// - Debugging tensor operations
+/// - Understanding how matrix multiplication works at a fundamental level
+/// - Verifying that our neural network calculations are correct
+///
+/// # Arguments
+/// * `xenc` - One-hot encoded input tensor
+/// * `xenc_w` - Result of matrix multiplication between xenc and weights
+/// * `w` - Weight matrix
+/// * `row_idx` - Row index to check (input position)
+/// * `col_idx` - Column index to check (neuron/output position)
+///
+/// # Returns
+/// * Result containing the computed value
+fn verify_matrix_multiplication(
+    xenc: &Tensor,
+    xenc_w: &Tensor,
+    w: &Tensor,
+    row_idx: usize,
+    col_idx: usize,
+) -> Result<f32, Box<dyn std::error::Error>> {
+    let value = xenc_w.i(row_idx)?.i(col_idx)?;
+
+    let row = xenc.i(row_idx)?.to_vec1::<f32>()?;
+    let col = w.i(col_idx)?.to_vec1::<f32>()?;
+
+    let mut manual_dot = 0.0;
+    for i in 0..27 {
+        manual_dot += row[i] * col[i];
+    }
+
+    let tensor_value = value.to_scalar::<f32>()?;
+    assert!(
+        (manual_dot - tensor_value).abs() < 1e-5,
+        "Manual calculation ({}) doesn't match tensor operation ({})",
+        manual_dot,
+        tensor_value
+    );
+
+    Ok(tensor_value)
+}
+
+/// Applies softmax activation to convert logits into probabilities
+///
+/// The softmax function converts raw model outputs (logits) into probabilities by:
+/// 1. Taking the exponential of each logit (to make all values positive)
+/// 2. Normalizing by dividing by the sum of all exponentials
+///
+/// This transformation ensures:
+/// - All outputs are between 0 and 1
+/// - Outputs sum to 1 (making them valid probabilities)
+/// - Preserves relative differences (larger logits -> larger probabilities)
+///
+/// The function follows this formula:
+/// softmax(x_i) = exp(x_i) / Σ exp(x_j)
+///
+/// # Arguments
+/// * `logits` - Tensor of raw model outputs
+/// * `device` - Device to store tensors on (CPU/GPU)
+///
+/// # Returns
+/// * Tensor of probabilities
+fn apply_softmax(logits: &Tensor) -> Result<Tensor, Box<dyn std::error::Error>> {
+    // Convert logits to exponential scale (all positive numbers)
+    // Equivalent to N(w, x)
+    let counts = logits.exp()?;
+
+    // Sum along dimension 1, keeping dimensions for broadcasting
+    let sum = counts.sum_keepdim(1)?;
+
+    // Broadcast sum to match counts shape for element-wise division
+    let sum_broadcast = sum.broadcast_as(counts.shape())?;
+
+    // Normalize to get probabilities
+    let prob = (counts / sum_broadcast)?;
+
+    Ok(prob)
 }
