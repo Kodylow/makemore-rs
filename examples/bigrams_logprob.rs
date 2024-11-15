@@ -16,6 +16,14 @@
 //! This example generates names using a bigram model and shows both raw probabilities and
 //! their logarithms. The log probabilities of each character transition indicate how natural
 //! or unusual that character combination is according to the training data.
+//!
+//! The goal is to maximize the likelihood of the data with respect to model parameters
+//! (statistical modeling). This is equivalent to maximizing the log likelihood (because log
+//! is monotonic), which is equivalent to minimizing the negative log likelihood, which is
+//! equivalent to minimizing the average negative log likelihood.
+//!
+//! log(a*b*c) = log(a) + log(b) + log(c)
+//!
 
 use anyhow::Result;
 use candle_core::Device;
