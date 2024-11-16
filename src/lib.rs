@@ -1,4 +1,5 @@
 use candle_core::{DType, Device, IndexOp, Tensor};
+use rand::distributions::Distribution;
 
 pub mod bigrams;
 pub mod data;
@@ -23,16 +24,34 @@ pub fn create_character_pairs(
     let mut xs = Vec::new();
     let mut ys = Vec::new();
 
-    for word in &words[..1] {
-        let chars: Vec<char> = format!(".{}.", word).chars().collect();
-        for window in chars.windows(2) {
-            let (ch1, ch2) = (window[0], window[1]);
-            let ix1 = char_to_index(ch1);
-            let ix2 = char_to_index(ch2);
+    // Create stoi mapping (char -> index)
+    let chars: Vec<char> = words
+        .iter()
+        .flat_map(|s| s.chars())
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
+        .collect();
+    let mut stoi: std::collections::HashMap<char, i64> = chars
+        .iter()
+        .enumerate()
+        .map(|(i, &c)| (c, i as i64 + 1))
+        .collect();
+    stoi.insert('.', 0); // Add start/end token
 
-            println!("{} {}", ch1, ch2);
-            xs.push(ix1);
-            ys.push(ix2);
+    // Process each word
+    for word in words {
+        // Add start/end tokens
+        let chars: Vec<char> = std::iter::once('.')
+            .chain(word.chars())
+            .chain(std::iter::once('.'))
+            .collect();
+
+        // Create pairs
+        for window in chars.windows(2) {
+            let ch1 = window[0];
+            let ch2 = window[1];
+            xs.push(*stoi.get(&ch1).unwrap());
+            ys.push(*stoi.get(&ch2).unwrap());
         }
     }
 
@@ -93,6 +112,21 @@ pub fn char_to_index(c: char) -> i64 {
         '.' => 0,
         'a'..='z' => (c as u8 - b'a' + 1) as i64,
         _ => panic!("Unexpected character: {}", c),
+    }
+}
+
+/// Converts an index to its corresponding character
+///
+/// # Arguments
+/// * `idx` - Index to convert
+///
+/// # Returns
+/// * Corresponding character
+pub fn index_to_char(idx: usize) -> char {
+    if idx == 0 {
+        '.'
+    } else {
+        (b'a' + (idx - 1) as u8) as char
     }
 }
 
@@ -189,4 +223,23 @@ pub fn apply_softmax(logits: &Tensor) -> Result<Tensor, Box<dyn std::error::Erro
     let prob = (counts / sum_broadcast)?;
 
     Ok(prob)
+}
+
+/// Samples an index from a probability distribution
+///
+/// # Arguments
+/// * `probs` - Tensor of probabilities
+///
+/// # Returns
+/// * Index of the sampled value
+pub fn sample_from_probs(probs: &Tensor) -> Result<usize, Box<dyn std::error::Error>> {
+    let temperature = 0.8;
+    let temp_tensor = Tensor::new(temperature, probs.device())?.unsqueeze(0)?;
+    let scaled_logits = probs.log()?.div(&temp_tensor)?;
+    let scaled_probs = apply_softmax(&scaled_logits)?;
+
+    let prob_vec: Vec<f32> = scaled_probs.to_vec1()?;
+    let mut rng = rand::thread_rng();
+    let dist = rand::distributions::WeightedIndex::new(&prob_vec)?;
+    Ok(dist.sample(&mut rng))
 }
